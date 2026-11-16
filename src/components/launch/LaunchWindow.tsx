@@ -20,6 +20,8 @@ import { CountdownDelayIcon } from "./CountdownDelayIcon";
 import { HudInteractionContext } from "./contexts/HudInteractionContext";
 import { FloatingWebcamPreviewView } from "./FloatingWebcamPreviewView";
 import { canToggleFloatingWebcamPreview } from "./floatingWebcamPreview";
+import { getHudInteractiveBounds } from "./hudMousePassthrough";
+import { useCameraPermission } from "./hooks/useCameraPermission";
 import { useHudBarDrag } from "./hooks/useHudBarDrag";
 import { useHudStateTransition } from "./hooks/useHudStateTransition";
 import { useLaunchHudInteractionState } from "./hooks/useLaunchHudInteractionState";
@@ -84,7 +86,12 @@ function LaunchWindowContent() {
 
 	const { selectedSource, hasSelectedSource, syncSelectedSource } = useLaunchWindowActions();
 
-	const showWebcamControls = webcamEnabled && !recording;
+	const { hudOverlayMousePassthroughSupported, platform } =
+		useLaunchWindowSystemState(preparePermissions);
+	const webcamPopoverOpen = openId === "webcam";
+	const cameraPermission = useCameraPermission(platform, webcamPopoverOpen, webcamEnabled);
+	const cameraAllowed = cameraPermission === "granted";
+	const showWebcamControls = cameraAllowed && webcamEnabled && !recording;
 	const { devices, selectedDeviceId, setSelectedDeviceId } = useMicrophoneDevices(
 		microphoneEnabled || openId === "mic",
 		microphoneDeviceId,
@@ -93,10 +100,7 @@ function LaunchWindowContent() {
 		devices: videoDevices,
 		selectedDeviceId: selectedVideoDeviceId,
 		setSelectedDeviceId: setSelectedVideoDeviceId,
-	} = useVideoDevices(webcamEnabled || openId === "webcam", webcamDeviceId);
-
-	const { hudOverlayMousePassthroughSupported, platform } =
-		useLaunchWindowSystemState(preparePermissions);
+	} = useVideoDevices(cameraAllowed && (webcamEnabled || webcamPopoverOpen), webcamDeviceId);
 
 	useEffect(() => {
 		if (!selectedDeviceId) {
@@ -113,10 +117,10 @@ function LaunchWindowContent() {
 	}, [selectedVideoDeviceId, setWebcamDeviceId]);
 
 	const webcamPreview = useWebcamPreviewOverlay({
-		webcamEnabled,
+		webcamEnabled: cameraAllowed && webcamEnabled,
 		webcamDeviceId,
 		showWebcamControls,
-		webcamPopoverOpen: openId === "webcam",
+		webcamPopoverOpen,
 		hudOverlayMousePassthroughSupported,
 		hudBarRef,
 	});
@@ -159,29 +163,21 @@ function LaunchWindowContent() {
 
 	useEffect(() => {
 		const reportInteractiveBounds = () => {
-			const elements = [hudBarRef.current, recordingWebcamPreviewContainerRef.current].filter(
-				(element): element is HTMLDivElement => element !== null,
-			);
-
-			if (elements.length === 0) {
-				window.electronAPI?.hudOverlaySetInteractiveBounds?.(null);
-				return;
-			}
-
 			window.electronAPI?.hudOverlaySetInteractiveBounds?.(
-				elements.map((element) => {
-					const rect = element.getBoundingClientRect();
-					return {
-						left: window.screenX + rect.left,
-						top: window.screenY + rect.top,
-						right: window.screenX + rect.right,
-						bottom: window.screenY + rect.bottom,
-					};
-				}),
+				getHudInteractiveBounds(document).map((rect) => ({
+					left: window.screenX + rect.left,
+					top: window.screenY + rect.top,
+					right: window.screenX + rect.right,
+					bottom: window.screenY + rect.bottom,
+					shape: rect.shape,
+				})),
 			);
 		};
 
 		reportInteractiveBounds();
+		// Keep native recovery current even when Windows stops forwarding mouse
+		// events. Include popovers and toasts, not just the main bar and webcam.
+		const boundsTimer = window.setInterval(reportInteractiveBounds, 100);
 		const resizeObserver = new ResizeObserver(reportInteractiveBounds);
 		if (hudBarRef.current) resizeObserver.observe(hudBarRef.current);
 		if (recordingWebcamPreviewContainerRef.current) {
@@ -191,17 +187,13 @@ function LaunchWindowContent() {
 		window.addEventListener("resize", reportInteractiveBounds);
 
 		return () => {
+			window.clearInterval(boundsTimer);
 			resizeObserver.disconnect();
 			window.removeEventListener("mousemove", reportInteractiveBounds);
 			window.removeEventListener("resize", reportInteractiveBounds);
 			window.electronAPI?.hudOverlaySetInteractiveBounds?.(null);
 		};
-	}, [
-		recordingHudOffset,
-		recordingWebcamPreviewContainerRef,
-		showRecordingWebcamPreview,
-		webcamPreview.webcamPreviewOffset,
-	]);
+	}, [recordingWebcamPreviewContainerRef]);
 
 	const { handleHudMouseEnter, handleHudMouseLeave, beginInteractiveHudAction } =
 		useLaunchHudInteractionState({
@@ -388,11 +380,13 @@ function LaunchWindowContent() {
 
 			<WebcamPopover
 				disabled={recording || countdownActive}
+				cameraPermission={cameraPermission}
 				webcamEnabled={webcamEnabled}
 				onDisableWebcam={() => setWebcamEnabled(false)}
-				canToggleFloatingPreview={canToggleFloatingWebcamPreview(
-					hudOverlayMousePassthroughSupported,
-				)}
+				canToggleFloatingPreview={
+					cameraAllowed &&
+					canToggleFloatingWebcamPreview(hudOverlayMousePassthroughSupported)
+				}
 				showFloatingWebcamPreview={showFloatingWebcamPreview}
 				onToggleFloatingPreview={() => setShowFloatingWebcamPreview((current) => !current)}
 				showWebcamControls={showWebcamControls && !showRecordingWebcamPreview}

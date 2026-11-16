@@ -115,7 +115,7 @@ jobs:
     name: Build macOS x64
     needs: prepare-release
     if: needs.prepare-release.outputs.release_scope == 'all'
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -126,6 +126,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare-release.outputs.source_sha }}
+
+      - name: Show Xcode version
+        run: xcodebuild -version
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -234,7 +237,7 @@ jobs:
     name: Build macOS arm64
     needs: prepare-release
     if: needs.prepare-release.outputs.release_scope == 'all'
-    runs-on: macos-14
+    runs-on: macos-26
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -245,6 +248,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare-release.outputs.source_sha }}
+
+      - name: Show Xcode version
+        run: xcodebuild -version
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
