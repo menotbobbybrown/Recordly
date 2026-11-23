@@ -1,10 +1,10 @@
 /* biome-ignore-all lint/correctness/useExhaustiveDependencies: grouped editor domain objects contain the thumbnail renderer dependencies. */
 import { type RefObject, useCallback, useEffect, useRef } from "react";
+import { FrameRenderer } from "@/lib/exporter/frameRenderer";
 import {
 	captureProjectThumbnailCanvas,
 	getProjectThumbnailRenderSize,
 } from "@/lib/projectThumbnailCanvas";
-import { FrameRenderer } from "@/lib/exporter/frameRenderer";
 import { toFileUrl } from "../projectPersistence";
 import type { useAppearanceState } from "../state/useAppearanceState";
 import type { useProjectState } from "../state/useProjectState";
@@ -12,6 +12,7 @@ import type { useTimelineState } from "../state/useTimelineState";
 import { getClipSourceEndMs, getClipSourceStartMs, type SpeedRegion } from "../types";
 import type { VideoPlaybackRef } from "../VideoPlayback";
 import { findPreviewClipAtTimelineTime } from "../videoPlayback/clipPlayback";
+import { applyDefaultCursorShape } from "../videoPlayback/cursorShapeOverride";
 
 type Input = {
 	project: ReturnType<typeof useProjectState>;
@@ -58,6 +59,7 @@ export function useProjectLibraryController({
 		cursorStyle,
 		cursorSway,
 		cursorIdleHide,
+		alwaysUsePointerCursor,
 		padding,
 		resolvedWebcamVideoUrl,
 		shadowIntensity,
@@ -231,7 +233,10 @@ export function useProjectLibraryController({
 					})(),
 					previewWidth,
 					previewHeight,
-					cursorTelemetry,
+					cursorTelemetry: applyDefaultCursorShape(
+						cursorTelemetry,
+						alwaysUsePointerCursor,
+					),
 					showCursor: effectiveShowCursor,
 					cursorStyle,
 					cursorSize,
@@ -313,6 +318,7 @@ export function useProjectLibraryController({
 		cursorStyle,
 		cursorSway,
 		cursorIdleHide,
+		alwaysUsePointerCursor,
 		cursorTelemetry,
 		clipRegions,
 		padding,

@@ -1,5 +1,3 @@
-import { ErrorReportButton } from "@/components/feedback/ErrorReportButton";
-import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { Button, Modal } from "@heroui/react";
 import {
 	ArrowLeft,
@@ -10,7 +8,9 @@ import {
 	Link,
 } from "@phosphor-icons/react";
 import { useRef } from "react";
+import { ErrorReportButton } from "@/components/feedback/ErrorReportButton";
 import { RecordlyDemoVideo } from "@/components/ui/RecordlyDemoVideo";
+import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { useBilling } from "./BillingProvider";
 import "./Billing.css";
 import { EarlyBirdTag } from "./EarlyBirdTag";
@@ -19,8 +19,9 @@ import { PlusFeatureDetails } from "./PlusFeatureDetails";
 import { UpgradeTestimonials } from "./UpgradeTestimonials";
 
 export { formatCloudBytes } from "./formatBillingValues";
-import { getDiscountPercent, getPlusPrice, hasVerifiedCheckoutPrice } from "./pricingOffer";
+
 import { formatPrice } from "./formatBillingValues";
+import { getDiscountPercent, getPlusPrice, hasVerifiedCheckoutPrice } from "./pricingOffer";
 
 /** Original upgrade design, retained for comparison and a one-line rollback. */
 export function ClassicPricingModal({ onSignIn }: { onSignIn: () => void }) {
@@ -305,11 +306,7 @@ export function ClassicPricingModal({ onSignIn }: { onSignIn: () => void }) {
 									{t("active", "Your Cloud plan is active.")}
 									{status.billing.cancelAtPeriodEnd && currentPeriodEnd
 										? ` ${t("ends", "It ends on {{date}}.", { date: new Date(currentPeriodEnd * 1000).toLocaleDateString(locale) })}`
-										: ""}{" "}
-									{t(
-										"noExpiry",
-										"Cloud recordings have no expiry while Cloud is active. They expire 7 days after Cloud ends.",
-									)}
+										: ""}
 									{status.billing.portalAvailable &&
 										` ${t("portal", "Manage your payment details or cancel in the secure billing portal.")}`}
 								</p>

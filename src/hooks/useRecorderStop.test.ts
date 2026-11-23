@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NativeCaptureStopResult } from "./recordingNativeCleanup";
 import { RecordingFileWriter } from "./recordingFileWriter";
+import type { NativeCaptureStopResult } from "./recordingNativeCleanup";
 import { useRecorderEditorSession } from "./useRecorderEditorSession";
 import { useRecorderStop } from "./useRecorderStop";
 
@@ -37,6 +37,7 @@ function createContext() {
 		finalizeRecordingSession: vi.fn().mockResolvedValue(undefined),
 		webcamTimeOffsetMs: { current: 0 },
 		hideEditorOverlayCursorByDefault: { current: false },
+		captureSourceKind: { current: "window" as "screen" | "window" },
 		storeMicrophoneSidecar: vi.fn().mockResolvedValue(null),
 		mediaRecorder: { current: null as MediaRecorder | null },
 		screenWriter: { current: null as RecordingFileWriter | null },
@@ -104,7 +105,7 @@ describe("recording stop editor handoff", () => {
 		expect(api.finishRecordingEditor).toHaveBeenCalledOnce();
 		expect(api.setCurrentVideoPath).toHaveBeenCalledWith(
 			"/recordings/completed.mp4",
-			expect.any(Object),
+			expect.objectContaining({ captureSourceKind: "window" }),
 		);
 		expect(context.openLoadingEditor.mock.invocationCallOrder[0]).toBeLessThan(
 			context.finalizeRecordingSession.mock.invocationCallOrder[0],

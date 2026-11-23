@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExportProgress, ExportResult } from "@/lib/exporter/types";
+import { resolveExportProgressUpdate } from "../exportProgressState";
 import type { ExportBranchContext } from "./exportBranchContext";
 import { runGifExport } from "./runGifExport";
 import { runMp4Export } from "./runMp4Export";
-import { resolveExportProgressUpdate } from "../exportProgressState";
 
 const mocks = vi.hoisted(() => ({
 	modernExport: vi.fn(),
@@ -43,7 +43,12 @@ vi.mock("@/lib/exporter/videoExporter", () => ({
 	},
 }));
 vi.mock("./buildExportRenderOptions", () => ({
-	buildExportRenderOptions: () => ({
+	buildExportRenderOptions: ({
+		onProgress,
+	}: {
+		onProgress: (progress: ExportProgress) => void;
+	}) => ({
+		onProgress,
 		wallpaper: "#101010",
 		zoomRegions: [],
 		showShadow: false,
@@ -61,6 +66,7 @@ vi.mock("./exportRunnerSupport", async (importOriginal) => ({
 	...(await importOriginal<typeof import("./exportRunnerSupport")>()),
 	showExportErrorToast: vi.fn(),
 }));
+
 import { toast } from "@/components/ui/toast";
 
 function context(destination: "download" | "share" = "download") {
@@ -140,6 +146,37 @@ beforeEach(() => {
 	});
 	mocks.streamBlob.mockResolvedValue("/tmp/share.mp4");
 	mocks.gifExport.mockResolvedValue({ success: true, blob: new Blob(["gif"]) });
+});
+
+it("shows one NVIDIA fallback warning and saves when the fallback succeeds", async () => {
+	const { value, input } = context();
+	mocks.modernExport.mockImplementationOnce(async () => {
+		const config = mocks.modernConstruct.mock.calls[0][0] as {
+			onProgress: (progress: ExportProgress) => void;
+		};
+		const progress = {
+			currentFrame: 0,
+			totalFrames: 30,
+			percentage: 0,
+			estimatedTimeRemaining: 0,
+		};
+		config.onProgress({ ...progress, phase: "preparing" });
+		expect(toast.warning).not.toHaveBeenCalled();
+		config.onProgress({ ...progress, phase: "preparing", nvidiaCudaFailed: true });
+		config.onProgress({
+			...progress,
+			phase: "extracting",
+			currentFrame: 15,
+			percentage: 50,
+			nvidiaCudaFailed: true,
+		});
+		return { success: true, blob: new Blob(["mp4"]) };
+	});
+	await runMp4Export(value);
+	expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
+		"NVIDIA CUDA export failed. Recordly is trying another export path.",
+	);
+	expect(input.exportSession.setExportedFilePath).toHaveBeenCalledWith("/saved/export.mp4");
 });
 
 describe("project-named output", () => {

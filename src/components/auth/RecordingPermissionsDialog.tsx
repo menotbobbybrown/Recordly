@@ -1,6 +1,6 @@
 import { Button, Modal } from "@heroui/react";
-import { useState } from "react";
 import { X } from "@phosphor-icons/react";
+import { useState } from "react";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { OnboardingFooter, OnboardingLayout, OnboardingPrimaryAction } from "./OnboardingLayout";
 import { OnboardingPermissions } from "./OnboardingPermissions";
@@ -11,12 +11,14 @@ export function RecordingPermissionsDialog({
 	onClose,
 	onFinish,
 	finishDisabled = false,
+	persistRequest = true,
 	standalone,
 }: {
 	open: boolean;
 	onClose: () => void;
 	onFinish: () => void;
 	finishDisabled?: boolean;
+	persistRequest?: boolean;
 	standalone: boolean;
 }) {
 	const t = useScopedT("onboarding");
@@ -64,6 +66,7 @@ export function RecordingPermissionsDialog({
 						>
 							<OnboardingPermissions
 								showFooter={false}
+								persistRequest={persistRequest}
 								onReadyChange={setReady}
 								onFinish={onFinish}
 							/>

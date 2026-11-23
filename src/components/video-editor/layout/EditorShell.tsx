@@ -1,4 +1,3 @@
-import { useI18n as useUiLocale } from "@/contexts/I18nContext";
 import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorAnnouncementBanner } from "@/components/announcements/EditorAnnouncementBanner";
 import { OnboardingController } from "@/components/auth/OnboardingController";
@@ -6,33 +5,38 @@ import { RecordlyAccountMenu } from "@/components/auth/RecordlyAccountMenu";
 import { RecordlySignInDialog, type SignInReason } from "@/components/auth/RecordlySignInDialog";
 import { useRecordlyAuth } from "@/components/auth/useRecordlyAuth";
 import { PricingModal } from "@/components/billing/PricingModal";
-import { getProjectShareRevision } from "../cloud/projectShareLinks";
 import { AccountProfileContext } from "@/components/ui/account-avatar";
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/toast";
 import { LoadingTransition } from "@/components/ui/loading-transition";
+import { Toaster } from "@/components/ui/toast";
 import type { useI18n } from "@/contexts/I18nContext";
+import { useI18n as useUiLocale } from "@/contexts/I18nContext";
 import { getStartupView } from "@/lib/startupView";
 import { RECORDING_DRAG_TYPE } from "@/types/recordingLibrary";
-import { collectLibrarySourceProtection } from "../dashboard/librarySourceProtection";
+import { getProjectShareRevision } from "../cloud/projectShareLinks";
 import { DashboardSettingsContext } from "../dashboard/DashboardSettings";
 import { HomeLoadingSkeleton } from "../dashboard/HomeLoadingSkeleton";
+import { collectLibrarySourceProtection } from "../dashboard/librarySourceProtection";
 import type { useEditorExportController } from "../export/useEditorExportController";
 import type { useExportDimensions } from "../export/useExportDimensions";
 import type { useExportSession } from "../export/useExportSession";
 import type { useExportSettings } from "../export/useExportSettings";
+import { useAutoApplyZooms } from "../hooks/useAutoApplyZooms";
 import type { useTimelineEditingController } from "../hooks/useTimelineEditingController";
 import { useVideoSourceRecovery } from "../hooks/useVideoSourceRecovery";
 import { RecordingLibraryPanel } from "../library/RecordingLibraryPanel";
 import { useRecordingLibrary } from "../library/useRecordingLibrary";
 import type { useVideoEditorPresets } from "../presets/useVideoEditorPresets";
+import { isMissingProjectRecording } from "../project/projectLoadError";
 import type { useEditorProjectController } from "../project/useEditorProjectController";
+import { resolveVideoUrl } from "../projectPersistence";
 import { SettingsPanel } from "../SettingsPanel";
+import type { SettingsSection } from "../SettingsSections";
 import type { useAppearanceState } from "../state/useAppearanceState";
 import type { useEditorUiState } from "../state/useEditorUiState";
 import type { useProjectState } from "../state/useProjectState";
 import type { useTimelineState } from "../state/useTimelineState";
-import type { SettingsSection } from "../SettingsSections";
+import { AutoZoomNudgeContext, useAutoZoomNudge } from "../timeline/useAutoZoomNudge";
 import { AppSettingsDialog } from "./AppSettingsDialog";
 import { EditorDialogs } from "./EditorDialogs";
 import { EditorHeader } from "./EditorHeader";
@@ -41,10 +45,6 @@ import { EditorPreviewPanel } from "./EditorPreviewPanel";
 import { EditorSidebar } from "./EditorSidebar";
 import { EditorTimelinePanel } from "./EditorTimelinePanel";
 import { ProjectLoadError } from "./ProjectLoadError";
-import { resolveVideoUrl } from "../projectPersistence";
-import { isMissingProjectRecording } from "../project/projectLoadError";
-import { AutoZoomNudgeContext, useAutoZoomNudge } from "../timeline/useAutoZoomNudge";
-import { useAutoApplyZooms } from "../hooks/useAutoApplyZooms";
 
 type Props = {
 	t: ReturnType<typeof useI18n>["t"];
@@ -140,6 +140,7 @@ export function EditorShell(props: Props) {
 		clipRegions: timeline.clipRegions,
 		zoomRegions: timeline.zoomRegions,
 		cursorTelemetry: editing.cursor.normalizedCursorTelemetry,
+		recordingZoomMarkers: editing.cursor.recordingZoomMarkers,
 		cursorTelemetrySourcePath: timeline.cursorTelemetrySourcePath,
 		onZoomSuggested: editing.zoomCommands.handleZoomSuggested,
 	});
@@ -256,6 +257,8 @@ export function EditorShell(props: Props) {
 			user={auth.user}
 			configured={auth.configured}
 			callbackError={auth.callbackError}
+			authenticationVersion={auth.callbackVersion}
+			authCallbackPending={auth.callbackActivity.pending}
 		/>
 	);
 	const editorDialogs = (
@@ -374,6 +377,9 @@ export function EditorShell(props: Props) {
 						canUndo={history.canUndo}
 						canRedo={history.canRedo}
 						handleOpenProjectBrowser={() => openDashboard()}
+						handleOpenRecordingHud={
+							projectController.openActions.handleOpenRecordingHud
+						}
 						handleUndo={history.handleUndo}
 						handleRedo={history.handleRedo}
 						handleProjectNameSubmit={saveActions.handleProjectNameSubmit}
@@ -479,12 +485,19 @@ export function EditorShell(props: Props) {
 								}}
 								settingsPanelProps={{
 									...settingsPanelProps,
+									onClearZooms: () => ui.timelineRef.current?.clearAllZooms(),
 									accountUser: auth.user,
 									onShowOnboarding: showOnboarding,
 								}}
 							/>
 							<EditorPreviewPanel
 								t={t}
+								onImportVideoClip={() => void library.importVideoFile()}
+								canImportVideoClip={
+									Boolean(project.videoSourcePath) &&
+									!library.busy &&
+									!library.importing
+								}
 								videoPath={project.videoPath}
 								previewVersion={ui.previewVersion}
 								aspectRatio={ui.aspectRatio}
@@ -543,6 +556,7 @@ export function EditorShell(props: Props) {
 								normalizedCursorTelemetry={cursor.normalizedCursorTelemetry}
 								currentTime={ui.currentTime}
 								handleSelectAnnotation={handleSelectAnnotation}
+								onDuplicateSelectedRegion={editing.duplicateSelectedRegion}
 							/>
 						</AutoZoomNudgeContext.Provider>
 					</div>

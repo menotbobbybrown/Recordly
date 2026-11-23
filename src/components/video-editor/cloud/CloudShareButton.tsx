@@ -1,6 +1,5 @@
 import { Input, TextArea } from "@heroui/react";
 import { ArrowClockwise, Export, LinkSimple } from "@phosphor-icons/react";
-import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ErrorReportButton } from "@/components/feedback/ErrorReportButton";
 import { LocalizedError } from "@/components/feedback/LocalizedError";
@@ -17,22 +16,14 @@ import { Label } from "@/components/ui/label";
 import { useI18n, useI18n as useUiLocale } from "@/contexts/I18nContext";
 import { ExportProgressIndicator } from "../export/ExportProgressIndicator";
 import { EXPORT_LOADING_MESSAGES } from "../export/exportLoadingMessages";
-import { ExportActivityCard } from "../layout/ExportActivityCard";
 import type { Props } from "./cloudShareProps";
 import { CLOUD_SHARE_ENDPOINT as DEFAULT_CLOUD_ENDPOINT } from "./endpoint";
 import { PublishedVideoPreview } from "./PublishedVideoPreview";
 import { SharedRecordings } from "./SharedRecordings";
 import { notifyShareCapacityChanged, RECORDING_LIMIT_MESSAGE } from "./shareCapacity";
 import { useCloudShareController } from "./useCloudShareController";
-type FloatingActivity = {
-	formContainer: HTMLElement | null;
-	visible: boolean;
-	thumbnail?: string;
-	onDismiss: () => void;
-	onRetry: () => void;
-};
 
-export function CloudShareButton(props: Props & { floatingActivity?: FloatingActivity }) {
+export function CloudShareButton(props: Props & { inlineContainer?: HTMLElement | null }) {
 	const {
 		onRegenerate,
 		filePath,
@@ -42,7 +33,7 @@ export function CloudShareButton(props: Props & { floatingActivity?: FloatingAct
 		authToken,
 		inline = false,
 		onRequestSignIn,
-		floatingActivity,
+		inlineContainer,
 	} = props;
 	const { t: uiText } = useUiLocale();
 	const { t } = useI18n();
@@ -55,7 +46,6 @@ export function CloudShareButton(props: Props & { floatingActivity?: FloatingAct
 		checkingCapacity,
 		error,
 		shareUrl,
-		publishedUrl,
 		needsRegenerate,
 		copied,
 		shareLinkInput,
@@ -73,15 +63,9 @@ export function CloudShareButton(props: Props & { floatingActivity?: FloatingAct
 		handleUpload,
 		handleCancel,
 		copyShareUrl,
-	} = useCloudShareController({ ...props, suppressSuccessToast: Boolean(floatingActivity) });
+	} = useCloudShareController(props);
 
-	const published = Boolean(publishedUrl && publishedUrl === shareUrl);
-	const activityVisible = floatingActivity?.visible ?? false;
-	const dismissActivity = floatingActivity?.onDismiss;
-	useEffect(() => {
-		if (activityVisible && !uploading && !published && !error) dismissActivity?.();
-	}, [activityVisible, uploading, published, error, dismissActivity]);
-
+	const recordingLimit = t("editor.cloud.recordingLimit", RECORDING_LIMIT_MESSAGE);
 	const uploadIndicator = (
 		<ExportProgressIndicator
 			label={t("editor.cloud.createLink")}
@@ -90,8 +74,11 @@ export function CloudShareButton(props: Props & { floatingActivity?: FloatingAct
 					? t("editor.cloud.uploadingVideo", "Uploading video…")
 					: t("editor.cloud.preparing", "Preparing the current edit…")
 			}
+			// Headlines describe rendering, so show them only while a new export is prepared.
 			headlines={
-				floatingActivity && phase !== "uploading" ? EXPORT_LOADING_MESSAGES : undefined
+				inlineContainer && phase === "preparing" && !filePath
+					? EXPORT_LOADING_MESSAGES
+					: undefined
 			}
 			value={progress}
 		/>
@@ -163,7 +150,7 @@ export function CloudShareButton(props: Props & { floatingActivity?: FloatingAct
 												: undefined
 										}
 									/>{" "}
-									<ErrorReportButton error={error} />
+									<ErrorReportButton error={error} context="cloud-share" />
 								</p>
 							)}
 						</>
@@ -232,18 +219,20 @@ export function CloudShareButton(props: Props & { floatingActivity?: FloatingAct
 						</p>
 					)}
 					{error || verifiedCapacity === false ? (
-						<p className="text-sm text-destructive">
+						<p role={error ? "alert" : undefined} className="text-sm text-destructive">
 							{error ? (
 								<LocalizedError
 									error={error}
 									summary={
 										signInRequired
 											? t("editor.cloud.signInRequired")
-											: undefined
+											: error === recordingLimit
+												? recordingLimit
+												: undefined
 									}
 								/>
 							) : (
-								t("editor.cloud.recordingLimit", RECORDING_LIMIT_MESSAGE)
+								recordingLimit
 							)}
 							{error && <ErrorReportButton error={error} context="cloud-share" />}
 						</p>
@@ -286,69 +275,10 @@ export function CloudShareButton(props: Props & { floatingActivity?: FloatingAct
 		</>
 	);
 
-	if (floatingActivity) {
-		return (
-			<>
-				{floatingActivity.formContainer && !uploading
-					? createPortal(form, floatingActivity.formContainer)
-					: null}
-				{activityVisible && (uploading || published || error) && (
-					<ExportActivityCard
-						label={t("editor.cloud.createLink")}
-						title={title.trim() || projectTitle}
-						format="mp4"
-						thumbnail={floatingActivity.thumbnail}
-						closeLabel={
-							uploading ? t("common.actions.cancel") : t("common.actions.close")
-						}
-						onClose={uploading ? () => void handleCancel() : floatingActivity.onDismiss}
-						autoDismiss={!uploading && published}
-					>
-						{uploading ? (
-							uploadIndicator
-						) : published ? (
-							<>
-								<p role="status" className="text-xs text-muted-foreground">
-									{t("editor.cloud.linkCreated")}
-								</p>
-								<Button
-									type="button"
-									variant="link"
-									size="sm"
-									className="self-start p-0"
-									onClick={() => void copyShareUrl()}
-								>
-									{copied
-										? t("editor.cloud.copied")
-										: t("editor.cloud.copyLink", "Copy link")}
-								</Button>
-							</>
-						) : error ? (
-							<>
-								<p role="alert" className="text-xs text-danger">
-									<LocalizedError error={error} />
-								</p>
-								<div className="flex flex-wrap items-center gap-2">
-									<Button
-										type="button"
-										variant="link"
-										size="sm"
-										className="p-0"
-										onClick={floatingActivity.onRetry}
-									>
-										{t("common.actions.retry", "Try again")}
-									</Button>
-									<ErrorReportButton error={error} context="cloud-share" />
-								</div>
-							</>
-						) : null}
-					</ExportActivityCard>
-				)}
-			</>
-		);
+	if (inline) {
+		if (inlineContainer === undefined) return <div>{form}</div>;
+		return inlineContainer && createPortal(form, inlineContainer);
 	}
-
-	if (inline) return <div>{form}</div>;
 
 	return (
 		<>
